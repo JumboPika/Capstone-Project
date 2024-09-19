@@ -28,7 +28,7 @@ sudo timeout 10s dhclient $WIFI_INTERFACE
 echo "Checking the connection ---"
 
 # 嘗試 ping Google 確認網路連線
-if ping -c 3 -W 5 google.com &>/dev/null; then
+if ping -c 3 -W 10 google.com &>/dev/null; then
     echo "Connected to WIFI successfully ---"
     exit 0
 else
