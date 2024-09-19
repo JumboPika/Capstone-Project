@@ -17,15 +17,15 @@
         /* 偵測黑暗模式，適應黑暗模式 */
         @media (prefers-color-scheme: dark) {
             body {
-                background-color: #212529; /* 深色背景 */
+                background-color: #212529; /* Bootstrap 的深色背景 */
                 color: #f8f9fa; /* 文字顏色 */
             }
             .form-control {
                 background-color: #343a40; /* 深色輸入框背景 */
-                color: #f8f9fa; /* 文字顏色 */
+                color: #f8f9fa; /* 深色模式輸入框文字顏色 */
             }
             .btn-primary {
-                background-color: #0d6efd; /* 按鈕顏色 */
+                background-color: #0d6efd; /* 調整按鈕顏色 */
                 border-color: #0d6efd;
             }
             .btn-primary:hover {
@@ -49,18 +49,13 @@
             <button type="submit" class="btn btn-primary w-100">Submit</button>
         </form>
 
-        <div class="text-center">
-            <button id="switch-to-client" class="btn btn-success w-100">Switch to Client Mode</button>
-        </div>
-
-        <div id="status-message" class="text-center mt-4"></div>
+        <div id="status-message" class="text-center"></div>
     </div>
 
     <!-- 引入 Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        // WiFi 表單提交事件
         $('#wifi-form').on('submit', function(event) {
             event.preventDefault();
             $.ajax({
@@ -77,25 +72,6 @@
                 },
                 error: function() {
                     $('#status-message').text('An error occurred. Please try again.').css('color', 'red');
-                }
-            });
-        });
-
-        // 切換至 Client 模式按鈕事件
-        $('#switch-to-client').on('click', function() {
-            $.ajax({
-                url: '/switch_to_client',
-                method: 'POST',
-                success: function(response) {
-                    $('#status-message').text(response.message);
-                    if (response.status === 'success') {
-                        $('#status-message').css('color', 'green');
-                    } else {
-                        $('#status-message').css('color', 'red');
-                    }
-                },
-                error: function() {
-                    $('#status-message').text('An error occurred while switching to client mode.').css('color', 'red');
                 }
             });
         });
