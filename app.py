@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 import os
+import subprocess
 
 app = Flask(__name__)
 
@@ -12,7 +13,13 @@ def index():
         # 更新 wpa_supplicant 配置
         update_wpa_supplicant(ssid, password)
 
-        return jsonify({"status": "success", "message": "WiFi configuration updated. You can now switch to client mode."})
+        # 嘗試切換到客戶端模式
+        success = switch_to_client()
+
+        if success:
+            return jsonify({'message': 'WiFi configuration updated. Successfully connected to the network.', 'status': 'success'})
+        else:
+            return jsonify({'message': 'WiFi configuration updated, but failed to connect. Returning to AP mode.', 'status': 'failed'})
 
     return render_template('index.html')
 
@@ -58,14 +65,17 @@ def update_wpa_supplicant(ssid, password):
     # 重新加載 wpa_supplicant 以應用更改
     os.system('sudo wpa_cli reconfigure')
 
-@app.route('/switch_to_client', methods=['POST'])
 def switch_to_client():
+    # 執行 switch_to_client.sh 腳本並檢查是否成功
     try:
-        # 執行 switch_to_client.sh 腳本
-        os.system('sudo /usr/local/bin/switch_to_client.sh')
-        return jsonify({"status": "success", "message": "Switched to client mode. Attempting to connect to WiFi."})
+        result = subprocess.run(['/usr/local/bin/switch_to_client.sh'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return True
+        else:
+            return False
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        print(f"Error running switch_to_client.sh: {e}")
+        return False
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
