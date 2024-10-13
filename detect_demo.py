@@ -1,5 +1,6 @@
 import sys
 import argparse
+
 import numpy as np
 import cv2 as cv
 
@@ -55,6 +56,7 @@ def visualize(image, poses):
     is_draw = False  # ensure only one person is drawn
 
     def _draw_lines(image, landmarks, keep_landmarks, is_draw_point=True, thickness=2):
+
         def _draw_by_presence(idx1, idx2):
             if keep_landmarks[idx1] and keep_landmarks[idx2]:
                 cv.line(image, landmarks[idx1], landmarks[idx2], (255, 255, 255), thickness)
@@ -116,6 +118,7 @@ def visualize(image, poses):
         edges_bgr[edges == 255] = [0, 255, 0]
         display_screen = cv.add(edges_bgr, display_screen)
 
+
         # draw box
         bbox = bbox.astype(np.int32)
         cv.rectangle(display_screen, bbox[0], bbox[1], (0, 255, 0), 2)
@@ -125,6 +128,9 @@ def visualize(image, poses):
         landmarks_word = landmarks_word[:-6, :]
 
         keep_landmarks = landmarks_screen[:, 4] > 0.8 # only show visible keypoints which presence bigger than 0.8
+
+        landmarks_screen = landmarks_screen
+        landmarks_word = landmarks_word
 
         landmarks_xy = landmarks_screen[:, 0: 2].astype(np.int32)
         _draw_lines(display_screen, landmarks_xy, keep_landmarks, is_draw_point=False)
@@ -144,70 +150,121 @@ def visualize(image, poses):
             # Top view
             landmarks_xz = landmarks_word[:, [0, 2]]
             landmarks_xz[:, 1] = -landmarks_xz[:, 1]
-            landmarks_xz = (landmarks_xz * 100 + 100).astype(np.int32)
-            _draw_lines(display_3d, landmarks_xz, keep_landmarks, thickness=2)
+            landmarks_xz = (landmarks_xz * 100 + np.array([300, 100])).astype(np.int32)
+            _draw_lines(display_3d, landmarks_xz,keep_landmarks, thickness=2)
 
-            # Side view
-            landmarks_yz = landmarks_word[:, [1, 2]]
-            landmarks_yz = (landmarks_yz * 100 + 100).astype(np.int32)
+            # Left view
+            landmarks_yz = landmarks_word[:, [2, 1]]
+            landmarks_yz[:, 0] = -landmarks_yz[:, 0]
+            landmarks_yz = (landmarks_yz * 100 + np.array([100, 300])).astype(np.int32)
             _draw_lines(display_3d, landmarks_yz, keep_landmarks, thickness=2)
 
-            # Add conditions for lying down and getting up actions
-            if check_lying_down(landmarks_word):
-                cv.putText(display_screen, "Lying Down!", (20, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            elif check_getting_up(landmarks_word):
-                cv.putText(display_screen, "Getting Up!", (20, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            # Right view
+            landmarks_zy = landmarks_word[:, [2, 1]]
+            landmarks_zy = (landmarks_zy * 100 + np.array([300, 300])).astype(np.int32)
+            _draw_lines(display_3d, landmarks_zy, keep_landmarks, thickness=2)
 
-    if args.vis:
-        cv.imshow('Pose Estimation', display_screen)
+    return display_screen, display_3d
 
-def check_lying_down(landmarks):
-    # A simple check: if the hip height is low compared to the head
-    hip_height = landmarks[11][1]  # Use left hip as reference
-    head_height = landmarks[0][1]   # Use head as reference
-    return hip_height > head_height + 50  # Adjust threshold as needed
+def is_lying_down(landmarks):
+    hip_y = landmarks[11][1]  # 左臀
+    head_y = landmarks[0][1]  # 頭
+    return head_y > hip_y + 20  # 判斷是否躺下
 
-def check_getting_up(landmarks):
-    # A simple check: if the hip is moving up from lying down position
-    hip_height = landmarks[11][1]
-    head_height = landmarks[0][1]
-    return hip_height < head_height - 50  # Adjust threshold as needed
 
-if __name__ == "__main__":
-    # Initialize Person Detection
-    person_det = MPPersonDet(args.backend_target)
+def is_getting_up(landmarks):
+    hip_y = landmarks[11][1]  # 左臀
+    shoulder_y = landmarks[5][1]  # 左肩
+    return shoulder_y < hip_y - 20  # 判斷是否起身
 
-    # Initialize Pose Estimation
-    pose_estimator = MPPose(args.model, args.backend_target)
+if __name__ == '__main__':
+    backend_id = backend_target_pairs[args.backend_target][0]
+    target_id = backend_target_pairs[args.backend_target][1]
 
-    if args.input:
+    # person detector
+    person_detector = MPPersonDet(modelPath='../person_detection_mediapipe/person_detection_mediapipe_2023mar.onnx',
+                                  nmsThreshold=0.3,
+                                  scoreThreshold=0.5,
+                                  topK=5000, # usually only one person has good performance
+                                  backendId=backend_id,
+                                  targetId=target_id)
+    # pose estimator
+    pose_estimator = MPPose(modelPath=args.model,
+                            confThreshold=args.conf_threshold,
+                            backendId=backend_id,
+                            targetId=target_id)
+
+    # If input is an image
+    if args.input is not None:
         image = cv.imread(args.input)
-        if image is None:
-            print('Error loading image:', args.input)
-            exit(-1)
 
-        pose_estimates = pose_estimator.infer(image)
-        visualize(image, pose_estimates)
+        # person detector inference
+        persons = person_detector.infer(image)
+        poses = []
 
-    else:
-        cap = cv.VideoCapture(0)
-        while True:
-            ret, image = cap.read()
-            if not ret:
-                print('Error reading video stream')
+        # Estimate the pose of each person
+        for person in persons:
+            # pose estimator inference
+            pose = pose_estimator.infer(image, person)
+            if pose is not None:
+                poses.append(pose)
+        # Draw results on the input image
+        image, view_3d = visualize(image, poses)
+
+        if len(persons) == 0:
+            print('No person detected!')
+        else:
+            print('Person detected!')
+
+        # Save results
+        if args.save:
+            cv.imwrite('result.jpg', image)
+            print('Results saved to result.jpg\n')
+
+        # Visualize results in a new window
+        if args.vis:
+            cv.namedWindow(args.input, cv.WINDOW_AUTOSIZE)
+            cv.imshow(args.input, image)
+            cv.imshow('3D Pose Demo', view_3d)
+            cv.waitKey(0)
+    else:  # Omit input to call default camera
+        deviceId = 0
+        cap = cv.VideoCapture(deviceId)
+
+        tm = cv.TickMeter()
+        while cv.waitKey(1) < 0:
+            hasFrame, frame = cap.read()
+            if not hasFrame:
+                print('No frames grabbed!')
                 break
 
-            person_bboxes = person_det.infer(image)
-            pose_estimates = []
-            for bbox in person_bboxes:
-                pose_estimates.append(pose_estimator.infer(image, bbox))
+            # person detector inference
+            persons = person_detector.infer(frame)
+            poses = []
 
-            visualize(image, pose_estimates)
+            tm.start()
+            # Estimate the pose of each person
+            for person in persons:
+                # pose detector inference
+                pose = pose_estimator.infer(frame, person)
+                if pose is not None:
+                    poses.append(pose)
+            tm.stop()
+            # Draw results on the input image
+            frame, view_3d = visualize(frame, poses)
 
-            if cv.waitKey(1) == 27:  # Exit on ESC key
-                break
-
-        cap.release()
-
-    if args.save:
-        cv.imwrite('output.png', image)
+            if len(persons) == 0:
+                print('No person detected!')
+            else:
+                print('Person detected!')
+                for pose in poses:
+                       _, landmarks_screen, _, _, _, _ = pose
+                       if is_lying_down(landmarks_screen):
+                              cv.putText(image, 'Lying Down', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                       elif is_getting_up(landmarks_screen):
+                              cv.putText(image, 'Getting Up', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                 cv.putText(image, 'FPS: {:.2f}'.format(tm.getFPS()), (0, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
+            
+            cv.imshow('MediaPipe Pose Detection Demo', frame)
+            cv.imshow('3D Pose Demo', view_3d)
+            tm.reset()
