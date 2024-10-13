@@ -228,43 +228,48 @@ if __name__ == '__main__':
             cv.imshow('3D Pose Demo', view_3d)
             cv.waitKey(0)
     else:  # Omit input to call default camera
-        deviceId = 0
-        cap = cv.VideoCapture(deviceId)
-
-        tm = cv.TickMeter()
-        while cv.waitKey(1) < 0:
-            hasFrame, frame = cap.read()
-            if not hasFrame:
-                print('No frames grabbed!')
-                break
-
-            # person detector inference
-            persons = person_detector.infer(frame)
-            poses = []
-
-            tm.start()
-            # Estimate the pose of each person
-            for person in persons:
-                # pose detector inference
-                pose = pose_estimator.infer(frame, person)
-                if pose is not None:
-                    poses.append(pose)
-            tm.stop()
-            # Draw results on the input image
-            frame, view_3d = visualize(frame, poses)
-
-            if len(persons) == 0:
-                print('No person detected!')
-            else:
-                print('Person detected!')
-                for pose in poses:
+           deviceId = 0
+           cap = cv.VideoCapture(deviceId)
+       
+           tm = cv.TickMeter()
+           while cv.waitKey(1) < 0:
+               hasFrame, frame = cap.read()
+               if not hasFrame:
+                   print('No frames grabbed!')
+                   break
+       
+               # person detector inference
+               persons = person_detector.infer(frame)
+               poses = []
+       
+               tm.start()
+               # Estimate the pose of each person
+               for person in persons:
+                   # pose detector inference
+                   pose = pose_estimator.infer(frame, person)
+                   if pose is not None:
+                       poses.append(pose)
+               tm.stop()
+               
+               # Draw results on the input image
+               frame, view_3d = visualize(frame, poses)
+       
+               if len(persons) == 0:
+                   print('No person detected!')
+               else:
+                   print('Person detected!')
+                   for pose in poses:
                        _, landmarks_screen, _, _, _, _ = pose
+                       
+                       # 檢測動作
                        if is_lying_down(landmarks_screen):
-                              cv.putText(image, 'Lying Down', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                           cv.putText(frame, 'Lying Down', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                        elif is_getting_up(landmarks_screen):
-                              cv.putText(image, 'Getting Up', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                 cv.putText(image, 'FPS: {:.2f}'.format(tm.getFPS()), (0, 15), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255))
-            
-            cv.imshow('MediaPipe Pose Detection Demo', frame)
-            cv.imshow('3D Pose Demo', view_3d)
-            tm.reset()
+                           cv.putText(frame, 'Getting Up', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+       
+                   # 使用 frame 而不是 image
+                   cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (6, 15), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255))
+       
+               cv.imshow('MediaPipe Pose Detection Demo', frame)
+               cv.imshow('3D Pose Demo', view_3d)
+               tm.reset()
