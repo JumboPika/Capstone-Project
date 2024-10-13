@@ -1,35 +1,48 @@
+import sys
 import argparse
-import cv2 as cv
 import numpy as np
+import cv2 as cv
 
-# 解析命令列參數
-def parse_args():
-    parser = argparse.ArgumentParser(description="Pose Detection")
-    parser.add_argument('--input', type=str, help='Path to input image or video file')
-    parser.add_argument('--model', type=str, default='path/to/pose/model', help='Path to pose estimation model')
-    parser.add_argument('--conf_threshold', type=float, default=0.5, help='Confidence threshold for pose estimation')
-    parser.add_argument('--save', action='store_true', help='Save output image')
-    parser.add_argument('--vis', action='store_true', help='Show visualization')
-    parser.add_argument('--backend_target', type=str, choices=['cpu', 'cuda'], default='cpu', help='Backend target for the model')
-    
-    return parser.parse_args()
+# Check OpenCV version
+opencv_python_version = lambda str_version: tuple(map(int, (str_version.split("."))))
+assert opencv_python_version(cv.__version__) >= opencv_python_version("4.10.0"), \
+       "Please install latest opencv-python for benchmark: python3 -m pip install --upgrade opencv-python"
 
-# 偵測是否有躺下或起身的動作
-def detect_pose_action(landmarks):
-    shoulder_y = landmarks[11][1]  # 左肩膀
-    hip_y = landmarks[23][1]       # 左臀部
-    foot_y = landmarks[27][1]      # 左腳
+from mp_pose import MPPose
 
-    if abs(shoulder_y - hip_y) < 30 and abs(hip_y - foot_y) < 30:
-        return 'lying_down'
-    elif shoulder_y < hip_y - 50:
-        return 'getting_up'
-    elif shoulder_y < hip_y and foot_y > hip_y:
-        return 'standing'
+sys.path.append('../person_detection_mediapipe')
+from mp_persondet import MPPersonDet
 
-    return None
+# Valid combinations of backends and targets
+backend_target_pairs = [
+    [cv.dnn.DNN_BACKEND_OPENCV, cv.dnn.DNN_TARGET_CPU],
+    [cv.dnn.DNN_BACKEND_CUDA,   cv.dnn.DNN_TARGET_CUDA],
+    [cv.dnn.DNN_BACKEND_CUDA,   cv.dnn.DNN_TARGET_CUDA_FP16],
+    [cv.dnn.DNN_BACKEND_TIMVX,  cv.dnn.DNN_TARGET_NPU],
+    [cv.dnn.DNN_BACKEND_CANN,   cv.dnn.DNN_TARGET_NPU]
+]
 
-# 繪製和顯示人體姿勢
+parser = argparse.ArgumentParser(description='Pose Estimation from MediaPipe')
+parser.add_argument('--input', '-i', type=str,
+                    help='Path to the input image. Omit for using default camera.')
+parser.add_argument('--model', '-m', type=str, default='./pose_estimation_mediapipe_2023mar.onnx',
+                    help='Path to the model.')
+parser.add_argument('--backend_target', '-bt', type=int, default=0,
+                    help='''Choose one of the backend-target pair to run this demo:
+                        {:d}: (default) OpenCV implementation + CPU,
+                        {:d}: CUDA + GPU (CUDA),
+                        {:d}: CUDA + GPU (CUDA FP16),
+                        {:d}: TIM-VX + NPU,
+                        {:d}: CANN + NPU
+                    '''.format(*[x for x in range(len(backend_target_pairs))]))
+parser.add_argument('--conf_threshold', type=float, default=0.8,
+                    help='Filter out hands of confidence < conf_threshold.')
+parser.add_argument('--save', '-s', action='store_true',
+                    help='Specify to save results. This flag is invalid when using camera.')
+parser.add_argument('--vis', '-v', action='store_true',
+                    help='Specify to open a window for result visualization. This flag is invalid when using camera.')
+args = parser.parse_args()
+
 def visualize(image, poses):
     display_screen = image.copy()
     display_3d = np.zeros((400, 400, 3), np.uint8)
@@ -39,8 +52,7 @@ def visualize(image, poses):
     cv.putText(display_3d, 'Top View', (200, 12), cv.FONT_HERSHEY_DUPLEX, 0.5, (0, 0, 255))
     cv.putText(display_3d, 'Left View', (0, 212), cv.FONT_HERSHEY_DUPLEX, 0.5, (0, 0, 255))
     cv.putText(display_3d, 'Right View', (200, 212), cv.FONT_HERSHEY_DUPLEX, 0.5, (0, 0, 255))
-    is_draw = False
-    detected_action = None
+    is_draw = False  # ensure only one person is drawn
 
     def _draw_lines(image, landmarks, keep_landmarks, is_draw_point=True, thickness=2):
         def _draw_by_presence(idx1, idx2):
@@ -98,110 +110,105 @@ def visualize(image, poses):
         bbox, landmarks_screen, landmarks_word, mask, heatmap, conf = pose
 
         edges = cv.Canny(mask, 100, 200)
-        kernel = np.ones((2, 2), np.uint8)
+        kernel = np.ones((2, 2), np.uint8) # expansion edge to 2 pixels
         edges = cv.dilate(edges, kernel, iterations=1)
         edges_bgr = cv.cvtColor(edges, cv.COLOR_GRAY2BGR)
         edges_bgr[edges == 255] = [0, 255, 0]
         display_screen = cv.add(edges_bgr, display_screen)
 
+        # draw box
         bbox = bbox.astype(np.int32)
         cv.rectangle(display_screen, bbox[0], bbox[1], (0, 255, 0), 2)
         cv.putText(display_screen, '{:.4f}'.format(conf), (bbox[0][0], bbox[0][1] + 12), cv.FONT_HERSHEY_DUPLEX, 0.5, (0, 0, 255))
-
+        # Draw line between each key points
         landmarks_screen = landmarks_screen[:-6, :]
-        keep_landmarks = landmarks_screen[:, 4] > 0.8
+        landmarks_word = landmarks_word[:-6, :]
 
-        landmarks_xy = landmarks_screen[:, 0:2].astype(np.int32)
+        keep_landmarks = landmarks_screen[:, 4] > 0.8 # only show visible keypoints which presence bigger than 0.8
+
+        landmarks_xy = landmarks_screen[:, 0: 2].astype(np.int32)
         _draw_lines(display_screen, landmarks_xy, keep_landmarks, is_draw_point=False)
 
-        if not is_draw:
+        # z value is relative to HIP, but we use constant to instead
+        for i, p in enumerate(landmarks_screen[:, 0: 3].astype(np.int32)):
+            if keep_landmarks[i]:
+                cv.circle(display_screen, np.array([p[0], p[1]]), 2, (0, 0, 255), -1)
+
+        if is_draw is False:
             is_draw = True
+            # Main view
+            landmarks_xy = landmarks_word[:, [0, 1]]
+            landmarks_xy = (landmarks_xy * 100 + 100).astype(np.int32)
+            _draw_lines(display_3d, landmarks_xy, keep_landmarks, thickness=2)
 
-        detected_action = detect_pose_action(landmarks_xy)
+            # Top view
+            landmarks_xz = landmarks_word[:, [0, 2]]
+            landmarks_xz[:, 1] = -landmarks_xz[:, 1]
+            landmarks_xz = (landmarks_xz * 100 + np.array([300, 100])).astype(np.int32)
+            _draw_lines(display_3d, landmarks_xz, keep_landmarks, thickness=2)
 
-    return display_screen, display_3d, detected_action
+            # Left view
+            landmarks_yz = landmarks_word[:, [2, 1]]
+            landmarks_yz[:, 0] = -landmarks_yz[:, 0]
+            landmarks_yz = (landmarks_yz * 100 + np.array([100, 300])).astype(np.int32)
+            _draw_lines(display_3d, landmarks_yz, keep_landmarks, thickness=2)
 
-# 主程式
-if __name__ == '__main__':
-    args = parse_args()  # 解析命令列參數
-    backend_id = 0 if args.backend_target == 'cpu' else 1  # 0 = CPU, 1 = CUDA
-    target_id = 0  # 0 = DEFAULT
+            # Add conditions for lying down and getting up actions
+            if check_lying_down(landmarks_word):
+                cv.putText(display_screen, "Lying Down!", (20, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            elif check_getting_up(landmarks_word):
+                cv.putText(display_screen, "Getting Up!", (20, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-    # person detector
-    person_detector = MPPersonDet(modelPath='../person_detection_mediapipe/person_detection_mediapipe_2023mar.onnx',
-                                  nmsThreshold=0.3,
-                                  scoreThreshold=0.5,
-                                  topK=5000,  # 通常只有一個人，這樣有良好的性能
-                                  backendId=backend_id,
-                                  targetId=target_id)
-    
-    # pose estimator
-    pose_estimator = MPPose(modelPath=args.model,
-                            confThreshold=args.conf_threshold,
-                            backendId=backend_id,
-                            targetId=target_id)
+    if args.vis:
+        cv.imshow('Pose Estimation', display_screen)
 
-    # 如果輸入是圖片
+def check_lying_down(landmarks):
+    # A simple check: if the hip height is low compared to the head
+    hip_height = landmarks[11][1]  # Use left hip as reference
+    head_height = landmarks[0][1]   # Use head as reference
+    return hip_height > head_height + 50  # Adjust threshold as needed
+
+def check_getting_up(landmarks):
+    # A simple check: if the hip is moving up from lying down position
+    hip_height = landmarks[11][1]
+    head_height = landmarks[0][1]
+    return hip_height < head_height - 50  # Adjust threshold as needed
+
+if __name__ == "__main__":
+    # Initialize Person Detection
+    person_det = MPPersonDet(args.backend_target)
+
+    # Initialize Pose Estimation
+    pose_estimator = MPPose(args.model, args.backend_target)
+
     if args.input:
         image = cv.imread(args.input)
-        persons = person_detector(image)
-        poses = []
-        for person in persons:
-            pose = pose_estimator(image, person)
-            if pose is not None:
-                poses.append(pose)
+        if image is None:
+            print('Error loading image:', args.input)
+            exit(-1)
 
-        if len(poses) > 0:
-            display_screen, display_3d, detected_action = visualize(image, poses)
+        pose_estimates = pose_estimator.infer(image)
+        visualize(image, pose_estimates)
 
-            if detected_action == 'lying_down':
-                cv.putText(display_screen, 'Warning: Lying down detected', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            elif detected_action == 'getting_up':
-                cv.putText(display_screen, 'Warning: Getting up detected', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            else:
-                cv.putText(display_screen, 'Person detected', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        else:
-            display_screen = image.copy()
-            cv.putText(display_screen, 'No person detected', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-        cv.imshow('Result', display_screen)
-        cv.imshow('3D', display_3d)
-        cv.waitKey(0)
-
-    # 如果輸入是即時網路攝影機
     else:
         cap = cv.VideoCapture(0)
         while True:
-            ret, frame = cap.read()
+            ret, image = cap.read()
             if not ret:
+                print('Error reading video stream')
                 break
 
-            persons = person_detector(frame)
-            poses = []
-            for person in persons:
-                pose = pose_estimator(frame, person)
-                if pose is not None:
-                    poses.append(pose)
+            person_bboxes = person_det.infer(image)
+            pose_estimates = []
+            for bbox in person_bboxes:
+                pose_estimates.append(pose_estimator.infer(image, bbox))
 
-            if len(poses) > 0:
-                display_screen, display_3d, detected_action = visualize(frame, poses)
+            visualize(image, pose_estimates)
 
-                # 顯示動作檢測結果
-                if detected_action == 'lying_down':
-                    cv.putText(display_screen, 'Warning: Lying down detected', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                elif detected_action == 'getting_up':
-                    cv.putText(display_screen, 'Warning: Getting up detected', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                else:
-                    cv.putText(display_screen, 'Person detected', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            else:
-                display_screen = frame.copy()
-                cv.putText(display_screen, 'No person detected', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-            cv.imshow('Result', display_screen)
-            cv.imshow('3D', display_3d)
-
-            if cv.waitKey(1) & 0xFF == ord('q'):
+            if cv.waitKey(1) == 27:  # Exit on ESC key
                 break
 
         cap.release()
-        cv.destroyAllWindows()
+
+    if args.save:
+        cv.imwrite('output.png', image)
