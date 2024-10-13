@@ -144,13 +144,12 @@ def visualize(image, poses):
             # Top view
             landmarks_xz = landmarks_word[:, [0, 2]]
             landmarks_xz[:, 1] = -landmarks_xz[:, 1]
-            landmarks_xz = (landmarks_xz * 100 + np.array([300, 100])).astype(np.int32)
+            landmarks_xz = (landmarks_xz * 100 + 100).astype(np.int32)
             _draw_lines(display_3d, landmarks_xz, keep_landmarks, thickness=2)
 
-            # Left view
-            landmarks_yz = landmarks_word[:, [2, 1]]
-            landmarks_yz[:, 0] = -landmarks_yz[:, 0]
-            landmarks_yz = (landmarks_yz * 100 + np.array([100, 300])).astype(np.int32)
+            # Side view
+            landmarks_yz = landmarks_word[:, [1, 2]]
+            landmarks_yz = (landmarks_yz * 100 + 100).astype(np.int32)
             _draw_lines(display_3d, landmarks_yz, keep_landmarks, thickness=2)
 
             # Add conditions for lying down and getting up actions
