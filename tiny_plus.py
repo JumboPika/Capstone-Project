@@ -48,52 +48,29 @@ def visualize(image, poses):
 
     return display_screen
 
+# Function to check if lying down (假設頭部位置比臀部低)
 def is_lying_down(landmarks):
-    hip_y = landmarks[11][1]
-    head_y = landmarks[0][1]
-    return head_y > hip_y + 20
+    hip_y = landmarks[11][1]  # 左臀
+    head_y = landmarks[0][1]  # 頭
+    return head_y > hip_y + 20  # 頭部低於臀部，躺下
 
+# Function to check if getting up (肩膀上升到臀部以上)
 def is_getting_up(landmarks):
     hip_y = landmarks[11][1]
     shoulder_y = landmarks[5][1]
     return shoulder_y < hip_y - 20
 
-def is_sitting(landmarks):
+# Function to check if sitting up (肩膀與臀部在相對位置)
+def is_sitting_up(landmarks):
     hip_y = landmarks[11][1]
-    knee_y = landmarks[13][1]
     shoulder_y = landmarks[5][1]
-    # Sitting when hips are above knees but below shoulders
-    return shoulder_y > hip_y > knee_y
-
-def is_preparing_to_get_up(landmarks):
-    hip_y = landmarks[11][1]
-    knee_y = landmarks[13][1]
-    shoulder_y = landmarks[5][1]
-    head_y = landmarks[0][1]
-    
-    # Check if the person is sitting and leaning forward
-    sitting = shoulder_y > hip_y > knee_y  # Sitting posture
-    leaning_forward = head_y > knee_y      # Head is close to knees (leaning forward)
-    
-    return sitting and leaning_forward
-
-# Movement history buffer setup
-history_buffer = deque(maxlen=30)  # Store the last 30 frames
-
-def update_history_buffer(action):
-    history_buffer.append(action)
-
-def is_consistent_action(action, threshold=0.7):
-    # Count how many times the action appears in the buffer
-    action_count = history_buffer.count(action)
-    # If the action appears in at least threshold% of the buffer, it's consistent
-    return action_count / len(history_buffer) > threshold
+    return hip_y > shoulder_y and shoulder_y > (hip_y - 20)  # 判斷是否坐起來
 
 if __name__ == '__main__':
     backend_id = backend_target_pairs[args.backend_target][0]
     target_id = backend_target_pairs[args.backend_target][1]
 
-    # Person detector
+    # person detector
     person_detector = MPPersonDet(modelPath='../person_detection_mediapipe/person_detection_mediapipe_2023mar.onnx',
                                   nmsThreshold=0.3,
                                   scoreThreshold=0.5,
@@ -101,25 +78,27 @@ if __name__ == '__main__':
                                   backendId=backend_id,
                                   targetId=target_id)
 
-    # Pose estimator
+    # pose estimator
     pose_estimator = MPPose(modelPath='./pose_estimation_mediapipe_2023mar.onnx',
                             confThreshold=0.8,
                             backendId=backend_id,
                             targetId=target_id)
+
+    # Movement history buffer
+    history_buffer = deque(maxlen=10)
 
     # Omit input to call default camera
     deviceId = 0
     cap = cv.VideoCapture(deviceId)
 
     tm = cv.TickMeter()
-
     while cv.waitKey(1) < 0:
         hasFrame, frame = cap.read()
         if not hasFrame:
             print('No frames grabbed!')
             break
 
-        # Person detector inference
+        # person detector inference
         persons = person_detector.infer(frame)
         poses = []
 
@@ -141,33 +120,38 @@ if __name__ == '__main__':
             for pose in poses:
                 _, landmarks_screen, _, _, _, _ = pose
 
-                # Detect actions
-                if is_preparing_to_get_up(landmarks_screen):
-                    action = 'Preparing to Get Up'
-                elif is_lying_down(landmarks_screen):
-                    action = 'Lying Down'
+                # Movement detection and record in history buffer
+                if is_lying_down(landmarks_screen):
+                    movement = 'lying_down'
+                    cv.putText(frame, 'Lying Down', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                elif is_sitting_up(landmarks_screen):
+                    movement = 'sitting_up'
+                    cv.putText(frame, 'Sitting Up', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 elif is_getting_up(landmarks_screen):
-                    action = 'Getting Up'
-                elif is_sitting(landmarks_screen):
-                    action = 'Sitting'
-                else:
-                    action = 'Standing'  # Default action if none of the others are detected
-
-                # Update history buffer
-                update_history_buffer(action)
-
-                # Check if the action is consistent over time
-                if is_consistent_action('Preparing to Get Up'):
-                    cv.putText(frame, 'Preparing to Get Up', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-                elif is_consistent_action('Lying Down'):
-                    cv.putText(frame, 'Lying Down', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                elif is_consistent_action('Getting Up'):
+                    movement = 'getting_up'
                     cv.putText(frame, 'Getting Up', (50, 150), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                elif is_consistent_action('Sitting'):
-                    cv.putText(frame, 'Sitting', (50, 200), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+                else:
+                    movement = 'unknown'
+
+                # Add movement to history buffer
+                history_buffer.append(movement)
+
+                # Use history buffer to determine final state
+                if history_buffer.count('lying_down') > len(history_buffer) // 2:
+                    final_state = 'Lying Down'
+                elif history_buffer.count('sitting_up') > len(history_buffer) // 2:
+                    final_state = 'Sitting Up'
+                elif history_buffer.count('getting_up') > len(history_buffer) // 2:
+                    final_state = 'Getting Up'
+                else:
+                    final_state = 'Unknown'
+
+                # Display final state
+                cv.putText(frame, f'Final State: {final_state}', (50, 200), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
 
             # Display FPS
             cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (6, 15), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255))
 
+        # Show result frames
         cv.imshow('MediaPipe Pose Detection Demo', frame)
         tm.reset()
