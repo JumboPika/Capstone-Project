@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import cv2 as cv
 from collections import deque
-import time  
+import time
 
 from mp_pose import MPPose
 
@@ -113,11 +113,21 @@ if __name__ == '__main__':
     tm = cv.TickMeter()
     alarm_triggered = False  # 用於控制是否已經觸發警報
 
+    start_time = time.time()
+    frame_count=0
+
     while cv.waitKey(1) < 0:
         hasFrame, frame = cap.read()
         if not hasFrame:
             print('無法獲取幀！')
             break
+
+        frame_count += 1
+        elapsed_time = time.time() - start_time
+        if elapsed_time >0:
+            fps = frame_count / elapsed_time
+        else:
+            fps=0
 
         # 檢測人
         persons = person_detector.infer(frame)
@@ -130,6 +140,7 @@ if __name__ == '__main__':
             if pose is not None:
                 poses.append(pose)
         tm.stop()
+
 
         # 繪製結果到影像上
         frame = visualize(frame, poses)
@@ -177,10 +188,11 @@ if __name__ == '__main__':
         if current_time - last_detection_time > no_person_timeout and not no_person_alarm_triggered:
             no_person_alarm()
             no_person_alarm_triggered = True  # 防止連續觸發警報
-        
+
         # 顯示FPS
-        cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (10, 50), cv.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255))
+        cv.putText(frame, 'FPS: {:.2f}'.format(fps), (10, 50), cv.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255))
 
         # 顯示結果影像
         cv.imshow('MediaPipe Pose Detection Demo', frame)
         tm.reset()
+
