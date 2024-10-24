@@ -158,7 +158,7 @@ if __name__ == '__main__':
                     final_state = 'Unknown'
 
         # 顯示FPS
-        cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (6, 15), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255))
+        cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (10, 50), cv.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255))
 
         # 顯示結果影像
         cv.imshow('MediaPipe Pose Detection Demo', frame)
