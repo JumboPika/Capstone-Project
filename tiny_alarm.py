@@ -124,23 +124,17 @@ if __name__ == '__main__':
         # 繪製結果到影像上
         frame = visualize(frame, poses)
 
-        if len(persons) == 0:
-            print('未檢測到人！')
-        else:
-            print('檢測到人！')
+        if len(persons) > 0:
             for pose in poses:
                 _, landmarks_screen, _, _, _, _ = pose
 
                 # 根據姿勢判斷動作並記錄到緩衝區
                 if is_lying_down(landmarks_screen):
                     movement = 'lying_down'
-                    cv.putText(frame, 'Lying Down', (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 elif is_sitting_up(landmarks_screen):
                     movement = 'sitting_up'
-                    cv.putText(frame, 'Sitting Up', (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 elif is_getting_up(landmarks_screen):
                     movement = 'getting_up'
-                    cv.putText(frame, 'Getting Up', (50, 150), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 else:
                     movement = 'unknown'
 
@@ -163,11 +157,8 @@ if __name__ == '__main__':
                 else:
                     final_state = 'Unknown'
 
-                # 顯示最終狀態
-                cv.putText(frame, f'Final State: {final_state}', (50, 200), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-
-            # 顯示FPS
-            cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (6, 15), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255))
+        # 顯示FPS
+        cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (6, 15), cv.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255))
 
         # 顯示結果影像
         cv.imshow('MediaPipe Pose Detection Demo', frame)
