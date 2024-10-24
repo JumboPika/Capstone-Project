@@ -3,11 +3,19 @@ import argparse
 import numpy as np
 import cv2 as cv
 from collections import deque
+import time  
 
 from mp_pose import MPPose
 
 sys.path.append('../person_detection_mediapipe')
 from mp_persondet import MPPersonDet
+
+# 初始化變數
+alarm_triggered = False  # 用於控制是否已經觸發警報
+no_person_alarm_triggered = False  # 用於控制無人時的小警報
+last_detection_time = time.time()  # 記錄最後一次檢測到人的時間
+no_person_timeout = 5  # 設置超過 5 秒沒有檢測到人則觸發警報
+
 
 # 有效的後端和運行目標組合
 backend_target_pairs = [
@@ -49,6 +57,8 @@ def visualize(image, poses):
 
     return display_screen
 
+def no_person_alarm():
+    print("警報：太久沒有偵測到人！")
 # 判斷是否躺下的函數
 def is_lying_down(landmarks):
     hip_y = landmarks[11][1]  # 左臀部
@@ -124,7 +134,12 @@ if __name__ == '__main__':
         # 繪製結果到影像上
         frame = visualize(frame, poses)
 
+        current_time = time.time()  # 獲取當前時間
+
         if len(persons) > 0:
+            last_detection_time = current_time  # 更新最後偵測到人的時間
+            no_person_alarm_triggered = False  # 重置無人警報的觸發狀態
+
             for pose in poses:
                 _, landmarks_screen, _, _, _, _ = pose
 
@@ -157,6 +172,12 @@ if __name__ == '__main__':
                 else:
                     final_state = 'Unknown'
 
+
+        # 如果超過指定時間沒有檢測到人，觸發小警報
+        if current_time - last_detection_time > no_person_timeout and not no_person_alarm_triggered:
+            no_person_alarm()
+            no_person_alarm_triggered = True  # 防止連續觸發警報
+        
         # 顯示FPS
         cv.putText(frame, 'FPS: {:.2f}'.format(tm.getFPS()), (10, 50), cv.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255))
 
