@@ -75,7 +75,7 @@ def is_standing_up(landmarks):
 
     # 如果臀部高於膝蓋，並且膝蓋高於腳踝，則判定為站立
     return hip_y < knee_y < ankle_y
-
+'''
 # 判斷是否轉腰的函數
 def is_turning_waist(landmarks):
     left_shoulder_x = landmarks[11][0]  # 左肩膀
@@ -92,6 +92,26 @@ def is_turning_waist(landmarks):
 
     # 若肩膀對齊或腿部水平，並且臀部偏移，則判定為轉腰
     return (shoulders_aligned or legs_horizontal) and hip_offset
+'''
+def is_turning_waist(landmarks):
+    left_shoulder_x = landmarks[11][0]  # 左肩膀
+    right_shoulder_x = landmarks[12][0]  # 右肩膀
+    hip_x = landmarks[23][0]  # 左臀部
+    left_knee_y = landmarks[25][1]  # 左膝
+    left_ankle_y = landmarks[27][1]  # 左腳踝
+
+    # 寬鬆判定肩膀是否對齊
+    shoulders_aligned = abs(left_shoulder_x - right_shoulder_x) < 30  # 擴大允許的偏差範圍到30
+
+    # 寬鬆判定臀部是否有水平偏移
+    hip_offset = abs(hip_x - left_shoulder_x) > 10  # 降低偏移門檻到10
+
+    # 寬鬆判定腿部是否水平
+    legs_horizontal = abs(left_knee_y - left_ankle_y) < 40  # 擴大允許的y軸差距到40
+
+    # 若肩膀對齊或腿部水平，且臀部偏移，則判定為轉腰
+    return (shoulders_aligned or legs_horizontal) and hip_offset
+
 
 # 警報觸發函數
 def trigger_alarm():
