@@ -153,16 +153,17 @@ if __name__ == '__main__':
                 _, landmarks_screen, _, _, _, _ = pose
 
                 # 根據姿勢判斷動作並記錄到緩衝區
-                if is_lying_down(landmarks_screen):
-                    movement = 'lying_down'
-                elif is_sitting_up(landmarks_screen):
-                    movement = 'sitting_up'
+                if is_standing_up(landmarks_screen):
+                    movement = 'standing_up'
                 elif is_turning_waist(landmarks_screen):
                     movement = 'turning_waist'
-                elif is_standing_up(landmarks_screen):
-                    movement = 'standing_up'
+                elif is_sitting_up(landmarks_screen):
+                    movement = 'sitting_up'
+                elif is_lying_down(landmarks_screen):
+                    movement = 'lying_down'
                 else:
                     movement = 'unknown'
+
 
                 # 終端顯示當前動作
                 print(f'Current Movement: {movement}')
