@@ -11,10 +11,9 @@ sys.path.append('../person_detection_mediapipe')
 from mp_persondet import MPPersonDet
 
 # 初始化變數
-alarm_triggered = False  # 用於控制是否已經觸發警報
-no_person_alarm_triggered = False  # 用於控制無人時的小警報
+alarm_triggered = False  # 控制是否已經觸發警報
 last_detection_time = time.time()  # 記錄最後一次檢測到人的時間
-no_person_timeout = 5  # 設置超過 5 秒沒有檢測到人則觸發警報
+no_person_timeout = 5  # 設置超過 5 秒沒有檢測到人則觸發小警報
 
 # 有效的後端和運行目標組合
 backend_target_pairs = [
@@ -56,9 +55,6 @@ def visualize(image, poses):
 
     return display_screen
 
-def no_person_alarm():
-    print("警報：太久沒有偵測到人！")
-
 # 判斷是否躺下的函數
 def is_lying_down(landmarks):
     hip_y = landmarks[23][1]  # 左臀部
@@ -87,11 +83,7 @@ def is_turning_waist(landmarks):
 
 # 警報觸發函數
 def trigger_alarm():
-    print("警報觸發！使用者正在起身！")
-
-# 重置警報的函數
-def reset_alarm():
-    print("警報重置，使用者又躺下了。")
+    print("!警報!")
 
 if __name__ == '__main__':
     backend_id = backend_target_pairs[args.backend_target][0]
@@ -112,7 +104,7 @@ if __name__ == '__main__':
                             targetId=target_id)
 
     # 緩衝區，用來儲存最近的動作歷史
-    history_buffer = deque(maxlen=10)
+    history_buffer = deque(maxlen=3)  # 改成3以檢測連續動作
 
     # 開啟攝影機
     deviceId = 0
@@ -121,18 +113,11 @@ if __name__ == '__main__':
     tm = cv.TickMeter()
     alarm_triggered = False  # 用於控制是否已經觸發警報
 
-    start_time = time.time()
-    frame_count = 0
-
     while cv.waitKey(1) < 0:
         hasFrame, frame = cap.read()
         if not hasFrame:
             print('無法獲取幀！')
             break
-
-        frame_count += 1
-        elapsed_time = time.time() - start_time
-        fps = frame_count / elapsed_time if elapsed_time > 0 else 0
 
         # 檢測人
         persons = person_detector.infer(frame)
@@ -149,11 +134,8 @@ if __name__ == '__main__':
         # 繪製結果到影像上
         frame = visualize(frame, poses)
 
-        current_time = time.time()  # 獲取當前時間
-
         if len(persons) > 0:
-            last_detection_time = current_time  # 更新最後偵測到人的時間
-            no_person_alarm_triggered = False  # 重置無人警報的觸發狀態
+            last_detection_time = time.time()  # 更新最後偵測到人的時間
 
             for pose in poses:
                 _, landmarks_screen, _, _, _, _ = pose
@@ -170,33 +152,28 @@ if __name__ == '__main__':
                 else:
                     movement = 'unknown'
 
-                # 將動作加入緩衝區
-                history_buffer.append(movement)
+                # 每當動作變化，顯示當前動作
+                cv.putText(frame, f'Current Movement: {movement}', (10, 100), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-                # 根據緩衝區的多數狀態來判斷最終狀態
-                if history_buffer.count('lying_down') > len(history_buffer) // 2:
-                    final_state = 'Lying Down'
-                    if alarm_triggered:
-                        reset_alarm()
-                        alarm_triggered = False
-                elif history_buffer.count('sitting_up') > len(history_buffer) // 2:
-                    final_state = 'Sitting Up'
-                elif history_buffer.count('turning_waist') > len(history_buffer) // 2:
-                    final_state = 'Turning Waist'
-                elif history_buffer.count('getting_up') > len(history_buffer) // 2:
-                    final_state = 'Getting Up'
-                    if not alarm_triggered:
-                        trigger_alarm()
-                        alarm_triggered = True
-                else:
-                    final_state = 'Unknown'
+                # 將動作加入緩衝區
+                if len(history_buffer) == 0 or movement != history_buffer[-1]:
+                    history_buffer.append(movement)
+
+                # 根據緩衝區判斷連續動作是否符合警報條件
+                if history_buffer.count('getting_up') == len(history_buffer):
+                    trigger_alarm()
+                    alarm_triggered = True
+                elif history_buffer.count('sitting_up') == len(history_buffer):
+                    # 如果偵測到使用者持續坐起，也可以觸發警報
+                    trigger_alarm()
+                    alarm_triggered = True
 
         # 如果超過指定時間沒有檢測到人，觸發小警報
-        if current_time - last_detection_time > no_person_timeout and not no_person_alarm_triggered:
-            no_person_alarm()
-            no_person_alarm_triggered = True  # 防止連續觸發警報
+        elif time.time() - last_detection_time > no_person_timeout:
+            cv.putText(frame, 'No Person Detected!', (10, 100), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
         # 顯示FPS
+        fps = tm.getFPS()
         cv.putText(frame, 'FPS: {:.2f}'.format(fps), (10, 50), cv.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255))
 
         # 顯示結果影像
