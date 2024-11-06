@@ -78,8 +78,18 @@ def is_turning_waist(landmarks):
     left_shoulder_x = landmarks[11][0]  # 左肩膀
     right_shoulder_x = landmarks[12][0]  # 右肩膀
     hip_x = landmarks[23][0]  # 左臀部
-    # 如果左右肩膀接近水平但臀部偏移，視為扭腰
-    return abs(left_shoulder_x - right_shoulder_x) < 15 and abs(hip_x - left_shoulder_x) > 15
+    left_knee_y = landmarks[25][1]  # 左膝
+    left_ankle_y = landmarks[27][1]  # 左腳踝
+
+    # 確認肩膀水平，且臀部有水平偏移
+    shoulders_aligned = abs(left_shoulder_x - right_shoulder_x) < 15
+    hip_offset = abs(hip_x - left_shoulder_x) > 15
+    # 確認腿部從垂直變為水平 (膝蓋和腳踝的 y 座標接近)
+    legs_horizontal = abs(left_knee_y - left_ankle_y) < 20
+
+    # 若肩膀對齊或腿部水平，並且臀部偏移，則判定為轉腰
+    return (shoulders_aligned or legs_horizontal) and hip_offset
+
 
 # 警報觸發函數
 def trigger_alarm():
