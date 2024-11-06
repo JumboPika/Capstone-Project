@@ -90,7 +90,6 @@ def is_turning_waist(landmarks):
     # 若肩膀對齊或腿部水平，並且臀部偏移，則判定為轉腰
     return (shoulders_aligned or legs_horizontal) and hip_offset
 
-
 # 警報觸發函數
 def trigger_alarm():
     print("!警報!")
@@ -161,6 +160,9 @@ if __name__ == '__main__':
                     movement = 'getting_up'
                 else:
                     movement = 'unknown'
+
+                # 終端顯示當前動作
+                print(f'動作判斷: {movement}')
 
                 # 每當動作變化，顯示當前動作
                 cv.putText(frame, f'Current Movement: {movement}', (10, 100), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
