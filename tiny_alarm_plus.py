@@ -61,19 +61,22 @@ def is_lying_down(landmarks):
     head_y = landmarks[0][1]  # 頭部
     return head_y > hip_y + 20  # 如果頭部比臀部低至少20像素，則判定為躺下
 
-# 判斷是否起身的函數
-def is_getting_up(landmarks):
-    hip_y = landmarks[23][1]  # 左臀部
-    shoulder_y = landmarks[11][1]  # 左肩膀
-    return shoulder_y < hip_y - 20  # 如果肩膀比臀部高20像素以上，則判定為起身
-
-# 判斷是否坐起的函數
+# 判斷是否坐起的函數 (起身)
 def is_sitting_up(landmarks):
     hip_y = landmarks[23][1]  # 左臀部
     shoulder_y = landmarks[11][1]  # 左肩膀
     return hip_y > shoulder_y and shoulder_y > (hip_y - 20)  # 如果肩膀比臀部高但差距小於20像素，則判定為坐起
 
-# 判斷是否扭腰的函數
+# 判斷是否站立的函數
+def is_standing_up(landmarks):
+    hip_y = landmarks[23][1]  # 左臀部
+    knee_y = landmarks[25][1]  # 左膝
+    ankle_y = landmarks[27][1]  # 左腳踝
+
+    # 如果臀部高於膝蓋，並且膝蓋高於腳踝，則判定為站立
+    return hip_y < knee_y < ankle_y
+
+# 判斷是否轉腰的函數
 def is_turning_waist(landmarks):
     left_shoulder_x = landmarks[11][0]  # 左肩膀
     right_shoulder_x = landmarks[12][0]  # 右肩膀
@@ -156,13 +159,13 @@ if __name__ == '__main__':
                     movement = 'sitting_up'
                 elif is_turning_waist(landmarks_screen):
                     movement = 'turning_waist'
-                elif is_getting_up(landmarks_screen):
-                    movement = 'getting_up'
+                elif is_standing_up(landmarks_screen):
+                    movement = 'standing_up'
                 else:
                     movement = 'unknown'
 
                 # 終端顯示當前動作
-                print(f'動作判斷: {movement}')
+                print(f'Current Movement: {movement}')
 
                 # 每當動作變化，顯示當前動作
                 cv.putText(frame, f'Current Movement: {movement}', (10, 100), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
@@ -176,18 +179,20 @@ if __name__ == '__main__':
                     trigger_alarm()
                     alarm_triggered = True
                 elif history_buffer.count('sitting_up') == len(history_buffer):
-                    # 如果偵測到使用者持續坐起，也可以觸發警報
                     trigger_alarm()
                     alarm_triggered = True
 
         # 如果超過指定時間沒有檢測到人，觸發小警報
         elif time.time() - last_detection_time > no_person_timeout:
-            cv.putText(frame, 'No Person Detected!', (10, 100), cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            cv.putText(frame, "No person detected", (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
+            if not alarm_triggered:  # 如果警報尚未觸發
+                trigger_alarm()
+                alarm_triggered = True
 
-        # 顯示FPS
-        fps = tm.getFPS()
-        cv.putText(frame, 'FPS: {:.2f}'.format(fps), (10, 50), cv.FONT_HERSHEY_DUPLEX, 1, (0, 0, 255))
+        # 顯示處理後的幀
+        cv.imshow('MediaPipe Pose Estimation Demo', frame)
 
-        # 顯示結果影像
-        cv.imshow('MediaPipe Pose Detection Demo', frame)
+        # 顯示 FPS 資訊
+        fps_info = 'FPS: {:.2f}'.format(tm.getFPS())
+        cv.putText(frame, fps_info, (10, 50), cv.FONT_HERSHEY_SIMPLEX, 0.75, (255, 0, 0), 2)
         tm.reset()
