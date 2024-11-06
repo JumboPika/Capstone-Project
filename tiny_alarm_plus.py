@@ -174,7 +174,12 @@ if __name__ == '__main__':
                 if len(history_buffer) == 0 or movement != history_buffer[-1]:
                     history_buffer.append(movement)
 
-                # 根據緩衝區判斷連續動作是否符合警報條件
+                # 當檢測到坐姿變成轉腰時立即觸發警報
+                if len(history_buffer) >= 2 and history_buffer[-2] == 'sitting_up' and history_buffer[-1] == 'turning_waist':
+                    trigger_alarm()
+                    alarm_triggered = True
+
+                # 根據緩衝區判斷其他連續動作是否符合警報條件
                 if history_buffer.count('getting_up') == len(history_buffer):
                     trigger_alarm()
                     alarm_triggered = True
