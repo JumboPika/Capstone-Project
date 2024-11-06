@@ -65,7 +65,7 @@ def is_lying_down(landmarks):
 def is_sitting_up(landmarks):
     hip_y = landmarks[23][1]  # 左臀部
     shoulder_y = landmarks[11][1]  # 左肩膀
-    return hip_y > shoulder_y and shoulder_y > (hip_y - 20)  # 如果肩膀比臀部高但差距小於20像素，則判定為坐起
+    return shoulder_y < hip_y - 20 # 如果肩膀比臀部高但差距小於20像素，則判定為坐起
 
 # 判斷是否站立的函數
 def is_standing_up(landmarks):
