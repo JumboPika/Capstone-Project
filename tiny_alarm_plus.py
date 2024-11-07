@@ -93,6 +93,7 @@ def is_turning_waist(landmarks):
     # 若肩膀對齊或腿部水平，並且臀部偏移，則判定為轉腰
     return (shoulders_aligned or legs_horizontal) and hip_offset
 '''
+'''
 def is_turning_waist(landmarks):
     left_shoulder_x = landmarks[11][0]  # 左肩膀
     right_shoulder_x = landmarks[12][0]  # 右肩膀
@@ -111,6 +112,24 @@ def is_turning_waist(landmarks):
 
     # 若肩膀對齊或腿部水平，且臀部偏移，則判定為轉腰
     return (shoulders_aligned or legs_horizontal) and hip_offset
+'''
+def is_turning_waist(landmarks):
+    # 獲取左膝、右膝和左臀部的 Y 座標
+    left_knee_y = landmarks[25][1]  # 左膝
+    right_knee_y = landmarks[26][1]  # 右膝
+    left_hip_y = landmarks[23][1]   # 左臀部
+    right_hip_y = landmarks[24][1]  # 右臀部
+
+    # 計算膝蓋和臀部之間的垂直距離差
+    knee_hip_diff_left = abs(left_knee_y - left_hip_y)
+    knee_hip_diff_right = abs(right_knee_y - right_hip_y)
+
+    # 判斷膝蓋和臀部是否接近水平（即差距小於一定的門檻）
+    is_knee_level_left = knee_hip_diff_left < 30  # 你可以調整這個數值來改變靈敏度
+    is_knee_level_right = knee_hip_diff_right < 30
+
+    # 如果兩側膝蓋和臀部接近水平，則返回 True，表示轉腰或側身
+    return is_knee_level_left and is_knee_level_right
 
 
 
