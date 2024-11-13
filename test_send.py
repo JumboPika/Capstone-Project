@@ -27,8 +27,8 @@ video_filename = None
 def start_recording(frame):
     global recording, video_writer, video_filename
     timestamp = int(time.time())
-    #video_filename = f"{video_dir}/video_{timestamp}.avi"
-    video_filename = f"{video_dir}/video_{timestamp}.mp4"
+    # 使用 format() 方法來取代 f-string
+    video_filename = "{}/video_{}.mp4".format(video_dir, timestamp)
     video_writer = cv.VideoWriter(video_filename, fourcc, 20.0, (frame.shape[1], frame.shape[0]))
     recording = True
     print("開始錄影")
@@ -38,8 +38,11 @@ def stop_recording(save):
     if recording:
         video_writer.release()
         if not save and video_filename:
-            os.remove(video_filename)
-            print("錄影已停止，影片已捨棄")
+            if os.path.exists(video_filename):
+                os.remove(video_filename)
+                print("錄影已停止，影片已捨棄")
+            else:
+                print("檔案 {} 不存在，無法刪除".format(video_filename))
         elif save:
             print("錄影已停止，影片已保存")
         recording = False
@@ -94,8 +97,7 @@ if __name__ == '__main__':
                     # 只有在 movement 被賦值後才發送
                     if movement:
                         sock.sendto(movement.encode(), (MULTICAST_GROUP, MULTICAST_PORT))
-                        print(f"Current Movement: {movement}")
+                        print("Current Movement: {}".format(movement))
     
     cap.release()
     cv.destroyAllWindows()
-
