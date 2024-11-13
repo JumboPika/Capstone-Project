@@ -90,8 +90,13 @@ if __name__ == '__main__':
                         if recording:
                             stop_recording(save=False)
                         movement = 'lying_down'
-
                     sock.sendto(movement.encode(), (MULTICAST_GROUP, MULTICAST_PORT))
                     print(f"Current Movement: {movement}")
+                    
+                    # 只有在 movement 被賦值後才發送
+                    if movement:
+                        sock.sendto(movement.encode(), (MULTICAST_GROUP, MULTICAST_PORT))
+                        print(f"Current Movement: {movement}")
+    
     cap.release()
     cv.destroyAllWindows()
