@@ -120,7 +120,7 @@ if __name__ == '__main__':
         for i in range(0, len(data), max_packet_size):
             video_sock.sendto(data[i:i+max_packet_size], (VIDEO_MULTICAST_GROUP, VIDEO_MULTICAST_PORT))
 
-        time.sleep(0.05)  # 增加間隔，降低幀率約 20fps
+        time.sleep(0.1)  # 增加間隔，降低幀率約 10fps
 
     # 釋放資源
     cap.release()
