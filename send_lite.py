@@ -33,6 +33,8 @@ def is_turning_waist(landmarks):
 recording = False
 video_writer = None
 video_path = None
+last_detection_time = time.time()
+cooldown_time = 2  # 動作偵測冷卻時間（秒）
 
 if __name__ == '__main__':
     # 初始化模型與攝像頭
@@ -66,6 +68,13 @@ if __name__ == '__main__':
         # 調整影像大小以減少負載
         frame = cv.resize(frame, (320, 240))  # 調整大小為 320x240
 
+        # 控制辨識頻率
+        current_time = time.time()
+        if current_time - last_detection_time < 0.5:  # 每 0.5 秒進行一次動作偵測
+            continue
+
+        last_detection_time = current_time  # 更新上次偵測時間
+
         # 進行人物偵測與姿勢估計
         persons = person_detector.infer(frame)
         if persons is not None and persons.size > 0:
@@ -82,6 +91,10 @@ if __name__ == '__main__':
                         movement = 'sitting_up'
                     elif is_lying_down(landmarks_screen):
                         movement = 'lying_down'
+
+                    # 冷卻時間內跳過重複警報
+                    if time.time() - last_detection_time < cooldown_time:
+                        movement = None
 
                     # 開始錄影 (坐起)
                     if movement == 'sitting_up' and not recording:
