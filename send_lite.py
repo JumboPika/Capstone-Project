@@ -33,6 +33,7 @@ def is_turning_waist(landmarks):
 recording = False
 video_writer = None
 video_path = None
+last_movement = None
 
 if __name__ == '__main__':
     # 初始化模型與攝像頭
@@ -66,9 +67,10 @@ if __name__ == '__main__':
         # 調整影像大小以減少負載
         frame = cv.resize(frame, (320, 240))  # 調整大小為 320x240
 
-        # 進行人物偵測與姿勢估計
+        # 進行人物偵測
         persons = person_detector.infer(frame)
-        if persons is not None and persons.size > 0:
+        
+        if persons is not None and persons.size > 0:  # 有偵測到人
             for person in persons:
                 pose = pose_estimator.infer(frame, person)
                 if pose:
@@ -87,6 +89,7 @@ if __name__ == '__main__':
                     if movement == 'sitting_up' and not recording:
                         print("開始錄影")
                         recording = True
+                        last_movement = movement
                         video_path = os.path.join(output_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
                         fourcc = cv.VideoWriter_fourcc(*'mp4v')
                         video_writer = cv.VideoWriter(video_path, fourcc, 15.0, (320, 240))  # 降低幀率與大小
@@ -95,23 +98,34 @@ if __name__ == '__main__':
                     if recording:
                         video_writer.write(frame)
 
-                    # 停止錄影 (躺下)
-                    if movement == 'lying_down' and recording:
-                        print("結束錄影並丟棄影片")
-                        recording = False
-                        video_writer.release()
-                        os.remove(video_path)  # 刪除未保存影片
-
                     # 保存影片 (轉身)
                     if movement == 'turning_waist' and recording:
                         print("轉身動作，保存影片")
                         recording = False
                         video_writer.release()
 
+                    # 丟棄影片 (坐起 -> 躺下)
+                    if movement == 'lying_down' and last_movement == 'sitting_up' and recording:
+                        print("坐起後躺下，結束錄影並丟棄影片")
+                        recording = False
+                        video_writer.release()
+                        os.remove(video_path)
+
+                    # 更新最後動作
+                    last_movement = movement
+
                     # 發送動作多播訊息
                     if movement:
                         movement_sock.sendto(movement.encode(), (MOVEMENT_MULTICAST_GROUP, MOVEMENT_MULTICAST_PORT))
                         print(f"Current Movement: {movement}")
+
+        else:  # 沒有偵測到人
+            if recording and last_movement == 'sitting_up':
+                print("坐起後未偵測到人，保存影片")
+                recording = False
+                video_writer.release()
+
+            last_movement = None  # 清除最後動作記錄
 
         # 編碼影像為 JPEG 格式並進行視訊多播
         _, buffer = cv.imencode('.jpg', frame, [cv.IMWRITE_JPEG_QUALITY, 50])  # 壓縮影像品質
