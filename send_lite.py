@@ -78,12 +78,12 @@ if __name__ == '__main__':
                     movement = None
 
                     # 檢測動作
-                    if is_turning_waist(landmarks_screen):
-                        movement = 'turning_waist'
+                    if is_lying_down(landmarks_screen):
+                        movement = 'lying_down'
                     elif is_sitting_up(landmarks_screen):
                         movement = 'sitting_up'
-                    elif is_lying_down(landmarks_screen):
-                        movement = 'lying_down'
+                    if is_turning_waist(landmarks_screen):
+                        movement = 'turning_waist'
 
                     # 開始錄影 (坐起)
                     if movement == 'sitting_up' and not recording:
