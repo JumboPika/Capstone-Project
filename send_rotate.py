@@ -31,8 +31,7 @@ def is_turning_waist(landmarks):
 
 # 緩衝區判斷
 def is_stable_no_person(buffer):
-    """根據緩衝區判定是否穩定地沒偵測到人"""
-    return buffer.count(True) < 2  # 少於兩幀顯示有偵測到人
+    return buffer.count(True) < 2  # 根據緩衝區判定是否穩定地沒偵測到人
 
 # 初始化變數
 recording = False
@@ -105,7 +104,7 @@ if __name__ == '__main__':
                         movement = 'lying_down'
                     elif is_sitting_up(landmarks_screen):
                         movement = 'sitting_up'
-                    if is_turning_waist(landmarks_screen):
+                    elif is_turning_waist(landmarks_screen):
                         movement = 'turning_waist'
 
                     # 開始錄影 (坐起)
@@ -121,12 +120,6 @@ if __name__ == '__main__':
                     # 錄影過程
                     if recording:
                         video_writer.write(frame)
-
-                    # 保存影片 (轉身)
-                    if movement == 'turning_waist' and recording:
-                        print("轉身動作，保存影片")
-                        recording = False
-                        video_writer.release()
 
                     # 丟棄影片 (坐起 -> 躺下)
                     if movement == 'lying_down' and last_movement == 'sitting_up' and recording:
@@ -144,7 +137,7 @@ if __name__ == '__main__':
                         print(f"Current Movement: {movement}")
 
         elif stable_no_person:  # 穩定地沒偵測到人
-            if recording and last_movement == 'sitting_up':
+            if recording:
                 print("坐起後未偵測到人，保存影片")
                 recording = False
                 video_writer.release()
