@@ -43,7 +43,7 @@ sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(MU
 
 while True:
     try:
-        sock.settimeout(0.1)  # 設置接收數據超時
+        sock.settimeout(1)  # 設置接收數據超時
         data, _ = sock.recvfrom(1024)
         message = data.decode()
 
