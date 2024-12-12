@@ -6,15 +6,16 @@ import os
 from datetime import datetime
 import time
 
-# 多播设置
+# 多播設置
 MULTICAST_GROUP = '224.0.0.2'
 MULTICAST_PORT = 5004
 
-# 初始化套接字
+# 初始化套接子
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 sock.bind(('', MULTICAST_PORT))
 mreq = struct.pack('4sl', socket.inet_aton(MULTICAST_GROUP), socket.INADDR_ANY)
 sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2**20)  # 增加接收緩衝區大小
 
 # 影片儲存設定
 SAVE_INTERVAL = 2 * 60  # 影片儲存間隔（秒）
@@ -27,6 +28,10 @@ video_filename = None
 
 # 緩衝區
 buffer = b""
+
+# 壓縮品質設置
+ENCODE_QUALITY = 50  # JPEG 壓縮品質
+encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), ENCODE_QUALITY]
 
 while True:
     # 接收數據包
@@ -59,11 +64,18 @@ while True:
                 video_writer = cv2.VideoWriter(video_filename, fourcc, 20.0, (frame.shape[1], frame.shape[0]))
                 start_time = time.time()  # 更新影片開始時間
 
+            # 壓縮影像以減少帶寬需求
+            _, compressed_frame = cv2.imencode('.jpg', frame, encode_param)
+            frame = cv2.imdecode(compressed_frame, cv2.IMREAD_COLOR)
+
             # 寫入影片
             video_writer.write(frame)
 
+            # 將圖像改變為原始的二倍大
+            resized_frame = cv2.resize(frame, (frame.shape[1] * 2, frame.shape[0] * 2), interpolation=cv2.INTER_LINEAR)
+
             # 顯示影像
-            cv2.imshow('Multicast Stream', frame)
+            cv2.imshow('Multicast Stream', resized_frame)
 
             # 如果按下 ESC 鍵，退出
             if cv2.waitKey(1) & 0xFF == 27:
