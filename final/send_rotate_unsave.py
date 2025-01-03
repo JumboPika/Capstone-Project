@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
 import numpy as np
@@ -55,6 +56,7 @@ if __name__ == '__main__':
     # 降低解析度 (例如 640x480)
     cap.set(cv.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv.CAP_PROP_FPS, 15)  #15fps
 
     movement_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     movement_sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
@@ -116,12 +118,11 @@ if __name__ == '__main__':
                     if is_stable:
                         movement_sock.sendto(stable_movement.encode(),
                                              (MOVEMENT_MULTICAST_GROUP, MOVEMENT_MULTICAST_PORT))
-                        print(f"Stable Movement: {stable_movement}")
+                        print("Stable Movement: {}".format(stable_movement))
 
                     # 控制錄影邏輯（如果需要）
                     if movement == 'sitting_up' and not recording:
-                        video_path = os.path.join('./example_outputs',
-                                                  f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+                        video_path = os.path.join('./example_outputs', "{}.mp4".format(datetime.now().strftime('%Y%m%d_%H%M%S')))
                         fourcc = cv.VideoWriter_fourcc(*'mp4v')
                         video_writer = cv.VideoWriter(video_path, fourcc, 15.0, (240, 320))
                         recording = True
