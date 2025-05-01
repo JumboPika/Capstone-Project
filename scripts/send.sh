@@ -10,4 +10,4 @@ conda activate jetson
 cd /opencv_zoo/models/pose_estimation_mediapipe
 
 # 執行 Python 腳本
-python send.py
+python send_rotate_unsave.py
